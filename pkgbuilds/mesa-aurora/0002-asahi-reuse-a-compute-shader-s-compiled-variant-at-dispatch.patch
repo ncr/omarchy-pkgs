@@ -1,0 +1,50 @@
+From c9997d9da990cd6d001d096d52a384d7e698659f Mon Sep 17 00:00:00 2001
+From: Eryk Wieliczko <eryk@wieliczko.ninja>
+Date: Sun, 25 Oct 2026 09:00:40 +0100
+Subject: [PATCH] asahi: reuse a compute shader's compiled variant at dispatch
+
+agx_launch_grid() called agx_get_shader_variant() on every dispatch,
+and that compiles the variant -- or fetches it from the disk cache --
+and inserts another copy into the shader's variant table, without
+looking in the table first. With the disk cache off, every dispatch
+recompiled the shader; with it on, every dispatch read the cache and
+the table grew by one entry per dispatch.
+
+Look the variant up in the table first, as agx_update_shader() does
+for the graphics stages.
+
+Each orphaned variant also keeps its 16 KiB executable BO, so a GL
+client that uploads to compressed textures (a staging compute blit per
+glTexSubImage) exhausts the 4 GiB USC window and its next shader BO
+allocation fails. Hyprland hits this after ~40 minutes at 120 Hz.
+
+Signed-off-by: Eryk Wieliczko <eryk@wieliczko.ninja>
+(cherry picked from commit 37bb4fd4, adapted to af3d9c6fc84)
+---
+ src/gallium/drivers/asahi/agx_state.c | 9 ++++++++-
+ 1 file changed, 8 insertions(+), 1 deletion(-)
+
+diff --git a/src/gallium/drivers/asahi/agx_state.c b/src/gallium/drivers/asahi/agx_state.c
+index 4161a4d..2fba975 100644
+--- a/src/gallium/drivers/asahi/agx_state.c
++++ b/src/gallium/drivers/asahi/agx_state.c
+@@ -8743,8 +8743,15 @@ agx_launch_grid(struct pipe_context *pipe, const struct pipe_grid_info *info)
+          agx_device(pipe->screen)->chip == AGX_CHIP_G17P &&
+          ctx->stage[MESA_SHADER_COMPUTE].custom_borders,
+    };
++   /* The variant compiled at link time, or by an earlier dispatch, is in
++    * the shader's table; agx_get_shader_variant() would compile (or fetch
++    * from the disk cache) and insert it again on every dispatch. */
++   struct hash_entry *variant =
++      _mesa_hash_table_search(uncompiled->variants, &key);
+    struct agx_compiled_shader *cs =
+-      agx_get_shader_variant(agx_screen(pipe->screen), pipe, uncompiled, &key);
++      variant ? variant->data
++              : agx_get_shader_variant(agx_screen(pipe->screen), pipe,
++                                       uncompiled, &key);
+ 
+    struct agx_grid grid;
+    if (indirect && agx_device(pipe->screen)->chip == AGX_CHIP_G17P) {
+-- 
+2.56.0
+

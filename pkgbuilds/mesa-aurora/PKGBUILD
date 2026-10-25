@@ -2,7 +2,7 @@ pkgbase=mesa-aurora
 pkgname=('mesa-aurora' 'vulkan-aurora')
 epoch=1
 pkgver=26.3.0_devel.20261017.af3d9c6fc84
-pkgrel=2
+pkgrel=3
 pkgdesc='Aurora Asahi Gallium, Zink and Honeykrisp'
 arch=('aarch64')
 groups=('omarchy-platform-apple-silicon')
@@ -22,8 +22,10 @@ makedepends=('git' 'meson' 'ninja' 'python-mako' 'python-yaml' 'python-packaging
              'wayland' 'wayland-protocols' 'vulkan-headers' 'vulkan-icd-loader' 'libdisplay-info'
              'lm_sensors' 'zlib' 'zstd' 'xcb-util-keysyms')
 source=("mesa::git+$url.git#commit=$_commit"
-        0001-hk-preserve-library-assertion-mode-in-test.patch)
-sha256sums=('SKIP' 'e8684509bed4c22c89064399842ce7646ad1572c176b1794953454f80edbb412')
+        0001-hk-preserve-library-assertion-mode-in-test.patch
+        0002-asahi-reuse-a-compute-shader-s-compiled-variant-at-dispatch.patch)
+sha256sums=('SKIP' 'e8684509bed4c22c89064399842ce7646ad1572c176b1794953454f80edbb412'
+            '23d466502a1da0369c7b276b7c3639ca2a6534b16d6af82e1bfe436e8d241ead')
 options=('!debug')
 _options=(-Dplatforms=x11,wayland
   -Dgallium-drivers=asahi,zink,softpipe -Dvulkan-drivers=asahi
@@ -38,6 +40,7 @@ _meson() {
 }
 prepare() {
   patch -d mesa -Np1 -i "$srcdir/0001-hk-preserve-library-assertion-mode-in-test.patch"
+  patch -d mesa -Np1 -i "$srcdir/0002-asahi-reuse-a-compute-shader-s-compiled-variant-at-dispatch.patch"
 }
 build() {
   # The bootstrap builds only three shader tools; the driver build runs tests.
